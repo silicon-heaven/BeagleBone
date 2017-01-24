@@ -47,7 +47,9 @@ static Gpio gpio_OLED_DC;
 static Gpio gpio_OLED_RW;
 
 static const char *spi_device_name = "/dev/spidev1.1";
-static SpiDevice spi(false);
+static SpiDevice spi(true);
+
+static const uint8_t OLED_C_SIZE = 96;
 
 // OLED_RST <--- MikroBus RST Reset
 // OLED_CS  <--- MikroBus CS  Chip select
@@ -111,13 +113,6 @@ void initBB()
 	//spi_mode |= SPI_READY;
 
 	spi.open(spi_device_name, spi_mode);
-	/*
-	// Initialize SPI3 module
-	SPI3_Init_Advanced(_SPI_FPCLK_DIV8, _SPI_MASTER | _SPI_8_BIT |
-	_SPI_CLK_IDLE_LOW | _SPI_FIRST_CLK_EDGE_TRANSITION |
-	_SPI_MSB_FIRST | _SPI_SS_DISABLE | _SPI_SSM_ENABLE | _SPI_SSI_1,
-	&_GPIO_MODULE_SPI3_PC10_11_12);
-	*/
 	gpio_OLED_RW.setValue(false);
 	//Delay_ms(100);
 }
@@ -125,6 +120,11 @@ void initBB()
 void spi_write(uint8_t byte)
 {
 	spi.transfer(SpiDevice::Buffer{byte});
+}
+
+void spi_write(const SpiDevice::Buffer &buff)
+{
+	spi.transfer(buff);
 }
 
 //Send command to OLED C display
@@ -151,6 +151,14 @@ void OLED_C_sendData(unsigned char data_value)
 	gpio_OLED_CS.setValue(1);
 }
 
+void OLED_C_sendData(const SpiDevice::Buffer &buff)
+{
+	gpio_OLED_CS.setValue(0);
+	gpio_OLED_DC.setValue(1);
+	spi_write(buff);
+	gpio_OLED_CS.setValue(1);
+}
+
 // Init sequence for 96x96 OLED color module
 void OLED_C_init()
 {
@@ -173,9 +181,9 @@ void OLED_C_init()
 	OLED_C_sendCommand(SEPS114A_OSC_ADJUST,0x03);              // frame rate : 95Hz
 	/* Set active display area of panel */
 	OLED_C_sendCommand(SEPS114A_DISPLAY_X1,0x00);
-	OLED_C_sendCommand(SEPS114A_DISPLAY_X2,0x5F);
+	OLED_C_sendCommand(SEPS114A_DISPLAY_X2,OLED_C_SIZE - 1);
 	OLED_C_sendCommand(SEPS114A_DISPLAY_Y1,0x00);
-	OLED_C_sendCommand(SEPS114A_DISPLAY_Y2,0x5F);
+	OLED_C_sendCommand(SEPS114A_DISPLAY_Y2,OLED_C_SIZE - 1);
 	/* Select the RGB data format and set the initial state of RGB interface port */
 	OLED_C_sendCommand(SEPS114A_RGB_IF,0x00);                 // RGB 8bit interface
 	/* Set RGB polarity */
@@ -246,12 +254,30 @@ void OLED_C_Color(char color_msb, char color_lsb )
 
 void OLED_C_Background()
 {
-	OLED_C_sendCommand(0x1D,0x02);                //Set Memory Read/Write mode
+	OLED_C_sendCommand(0x1D, 0x02);                //Set Memory Read/Write mode
+	int step_no = 0;
+	int step_size = 5;
+	{
+		int offset = step_no * step_size;
+		int width = OLED_C_SIZE - 2 * offset;
 
-	OLED_C_MemorySize(0x00,0x5F,0x00,0x5F);
-	DDRAM_access();
-	for(int j=0;j<9216;j++){
-		OLED_C_Color(0xFF,0xFF);
+		OLED_C_MemorySize(offset, offset + width - 1, offset, offset + width - 1);
+
+		DDRAM_access();
+		for (int j = 0; j < width; ++j) {
+			SpiDevice::Buffer buff;
+			buff.resize(width * 2);
+			for (size_t i = 0; i < buff.size(); i+=2) {
+				buff[i] = 0xFF;
+				buff[i+1] = 0xFF;
+			}
+			OLED_C_sendData(buff);
+		}
+		/*
+		for(int j=0;j<9216;j++){
+			OLED_C_Color(0xFF,0xFF);
+		}
+		*/
 	}
 	//delay_ms(1000);
 

@@ -82,6 +82,16 @@ void SpiDevice::close()
 	}
 }
 
+static void dump_buffer(const SpiDevice::Buffer &buffer)
+{
+	for (size_t i = 0; i < buffer.size(); ++i) {
+		if (i > 0 && (i % 16) == 0)
+			fprintf(stderr, "\n");
+		fprintf(stderr, "%02x ", buffer[i]);
+	}
+	fprintf(stderr, "\n");
+}
+
 void SpiDevice::transfer(const Buffer &tx_data, Buffer *p_rx_data) throw(std::runtime_error)
 {
 	Buffer tmp_rx_data;
@@ -98,11 +108,8 @@ void SpiDevice::transfer(const Buffer &tx_data, Buffer *p_rx_data) throw(std::ru
 	tr.bits_per_word = m_bits;
 
 	if(m_debug) {
-		std::cerr << "sending: " << std::setw(2) << std::hex << std::setfill('0');
-		for (size_t i = 0; i < tx_data.size(); ++i) {
-			std::cerr << ' ' << (int)(((uint8_t*)tr.tx_buf)[i]);
-		}
-		std::cerr << std::endl;
+		std::cerr << "sending:\n";
+		dump_buffer(tx_data);
 	}
 
 	int ret = ioctl(m_fd, SPI_IOC_MESSAGE(1), &tr);
@@ -112,10 +119,7 @@ void SpiDevice::transfer(const Buffer &tx_data, Buffer *p_rx_data) throw(std::ru
 	}
 
 	if(m_debug) {
-		std::cerr << "received: " << std::setw(2) << std::hex << std::setfill('0');
-		for (size_t i = 0; i < rx_data.size(); ++i) {
-			std::cerr << ' ' << (int)(((uint8_t*)tr.rx_buf)[i]);
-		}
-		std::cerr << std::endl;
+		std::cerr << "received:\n";
+		dump_buffer(rx_data);
 	}
 }
