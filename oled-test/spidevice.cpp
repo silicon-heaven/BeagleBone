@@ -94,32 +94,42 @@ static void dump_buffer(const SpiDevice::Buffer &buffer)
 
 void SpiDevice::transfer(const Buffer &tx_data, Buffer *p_rx_data) throw(std::runtime_error)
 {
-	Buffer tmp_rx_data;
-	Buffer &rx_data = p_rx_data? *p_rx_data: tmp_rx_data;
-	rx_data.resize(tx_data.size());
-
-	struct spi_ioc_transfer tr;
-	::memset(&tr, 0, sizeof(tr));
-	tr.tx_buf = (unsigned long)tx_data.data();
-	tr.rx_buf = (unsigned long)rx_data.data();
-	tr.len = tx_data.size();
-	tr.delay_usecs = m_delay;
-	tr.speed_hz = m_speed;
-	tr.bits_per_word = m_bits;
-
 	if(m_debug) {
 		std::cerr << "sending:\n";
 		dump_buffer(tx_data);
 	}
 
-	int ret = ioctl(m_fd, SPI_IOC_MESSAGE(1), &tr);
-	if (ret < 1) {
-		perror("can't send spi message");
-		throw std::runtime_error(std::string("can't make SPI transfer"));
-	}
+	if(p_rx_data)
+		p_rx_data->resize(tx_data.size());
 
+	struct spi_ioc_transfer tr;
+	::memset(&tr, 0, sizeof(tr));
+	tr.delay_usecs = m_delay;
+	tr.speed_hz = m_speed;
+	tr.bits_per_word = m_bits;
+
+	size_t max_spi_packet_size = 1024 * 2 * 2;
+	size_t n_sent = 0;
+	while(n_sent < tx_data.size()) {
+		size_t len = tx_data.size() - n_sent;
+		if(len > max_spi_packet_size)
+			len = max_spi_packet_size;
+		tr.tx_buf = (unsigned long)(tx_data.data() + n_sent);
+		tr.rx_buf = (unsigned long)(p_rx_data? p_rx_data->data() + n_sent: nullptr);
+		tr.len = len;
+		if(m_debug)
+			std::cerr << "sending " << len << " bytes of data" << std::endl;
+		int ret = ioctl(m_fd, SPI_IOC_MESSAGE(1), &tr);
+		if (ret < 1) {
+			perror("can't send spi message");
+			throw std::runtime_error(std::string("can't make SPI transfer"));
+		}
+		n_sent += len;
+	}
 	if(m_debug) {
-		std::cerr << "received:\n";
-		dump_buffer(rx_data);
+		if(p_rx_data) {
+			std::cerr << "received:\n";
+			dump_buffer(*p_rx_data);
+		}
 	}
 }

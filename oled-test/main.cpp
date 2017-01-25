@@ -195,7 +195,7 @@ void OLED_C_init()
 	/* Set Memory Read/Write mode */
 	OLED_C_sendCommand(SEPS114A_MEMORY_WRITE_READ,0x00);
 	/* Set row scan direction */
-	OLED_C_sendCommand(SEPS114A_ROW_SCAN_DIRECTION,0x00);     // Column : 0 --> Max, Row : 0 --> Max
+	OLED_C_sendCommand(SEPS114A_ROW_SCAN_DIRECTION,0x00);     // Column : 0 --> Max, Row : 0 --> Max
 	/* Set row scan mode */
 	OLED_C_sendCommand(SEPS114A_ROW_SCAN_MODE,0x00);          // Alternate scan mode
 	/* Set column current */
@@ -245,6 +245,31 @@ void OLED_C_MemorySize(char X1, char X2, char Y1, char Y2)
 	OLED_C_sendCommand(SEPS114A_MEM_Y2,Y2);
 }
 
+void OLED_C_drawBox(uint8_t x1, uint8_t y1, uint8_t width, uint8_t height, uint8_t r, uint8_t g, uint8_t b)
+{
+	r = r >> 3;
+	g = g >> 2;
+	b = b >> 3;
+
+	OLED_C_sendCommand(SEPS114A_MEM_X1, x1);
+	OLED_C_sendCommand(SEPS114A_MEM_X2, x1 + width - 1);
+	OLED_C_sendCommand(SEPS114A_MEM_Y1, y1);
+	OLED_C_sendCommand(SEPS114A_MEM_Y2, y1 + height - 1);
+	DDRAM_access();
+	SpiDevice::Buffer buff;
+	buff.resize(height * width * 2);
+	int n = 0;
+	for (int j = 0; j < height; ++j) {
+		for (size_t i = 0; i < width; ++i) {
+			// rrrrrggg gggbbbbb
+			buff[n] = (r << 3) | (g >> 3);
+			buff[n+1] = (g << 5) | b;
+			n += 2;
+		}
+	}
+	OLED_C_sendData(buff);
+}
+
 //Select color
 void OLED_C_Color(char color_msb, char color_lsb )
 {
@@ -255,30 +280,18 @@ void OLED_C_Color(char color_msb, char color_lsb )
 void OLED_C_Background()
 {
 	OLED_C_sendCommand(0x1D, 0x02);                //Set Memory Read/Write mode
-	int step_no = 0;
-	int step_size = 5;
-	{
-		int offset = step_no * step_size;
+	int color = 0xFF0000;
+	for (int offset = 0; offset < OLED_C_SIZE / 2; offset+=5) {
 		int width = OLED_C_SIZE - 2 * offset;
-
-		OLED_C_MemorySize(offset, offset + width - 1, offset, offset + width - 1);
-
-		DDRAM_access();
-		for (int j = 0; j < width; ++j) {
-			SpiDevice::Buffer buff;
-			buff.resize(width * 2);
-			for (size_t i = 0; i < buff.size(); i+=2) {
-				buff[i] = 0xFF;
-				buff[i+1] = 0xFF;
-			}
-			OLED_C_sendData(buff);
-		}
-		/*
-		for(int j=0;j<9216;j++){
-			OLED_C_Color(0xFF,0xFF);
-		}
-		*/
+		uint8_t r = (color >> 16);
+		uint8_t g = (color >> 8);
+		uint8_t b = color;
+		OLED_C_drawBox(offset, offset, width, width, r, g, b);
+		color >>= 2;
 	}
+	/*
+	for(int j=0;j<9216;j++){
+		OLED_C_Color(0xFF,0xFF);
 	//delay_ms(1000);
 
 	OLED_C_MemorySize(0x05,0x5A,0x05,0x5A);
@@ -320,6 +333,7 @@ void OLED_C_Background()
 	for(int j=0;j<4225;j++){
 		OLED_C_Color(0x80,0xFF);
 	}
+	*/
 	delay_ms(5000);
 }
 
