@@ -6,8 +6,11 @@ CONFIG -= qt
 SOURCES += \
     gpio.cpp \
     spidevice.cpp \
-    main.cpp
+    main.cpp \
+    oledcdisplay.cpp
 
 HEADERS += \
     gpio.h \
-    spidevice.h
+    spidevice.h \
+    seps114a.h \
+    oledcdisplay.h
