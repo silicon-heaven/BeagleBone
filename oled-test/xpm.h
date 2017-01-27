@@ -25,7 +25,7 @@ public:
 	Xpm();
 	int width() const {return m_width;}
 	int height() const {return m_height;}
-	const Color& color(int row, int col) const;
+	const Color& colorAt(int row, int col) const;
 	bool isValid() const {return m_width > 0 && m_height > 0 && m_colors.size() > 0;}
 
 	void wrapData(const char *data[]);

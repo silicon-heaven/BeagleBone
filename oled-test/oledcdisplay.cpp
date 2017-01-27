@@ -35,10 +35,28 @@ bool string_replace(std::string& str, const std::string& from, const std::string
 	return true;
 }
 */
+OledCDisplay::Color xpmColorToOled(uint8_t r, uint8_t g, uint8_t b)
+{
+	return OledCDisplay::Color::fromRGB(r, g, b);
+}
+
 namespace font {
 #include "font/latin1_8x8.xpm"
 }
 
+}
+
+OledCDisplay::Rect OledCDisplay::Rect::displayIntersection() const
+{
+	if(x1() >= OLED_C_SIZE || y1() >= OLED_C_SIZE)
+		return Rect();
+
+	Rect ret = *this;
+	if(ret.x2() >= OLED_C_SIZE)
+		ret.setX2(OLED_C_SIZE - 1);
+	if(ret.y2() >= OLED_C_SIZE)
+		ret.setY2(OLED_C_SIZE - 1);
+	return ret;
 }
 
 OledCDisplay::Color OledCDisplay::Color::Black = OledCDisplay::Color::fromRGB(0x00, 0x00, 0x00);
@@ -54,7 +72,7 @@ OledCDisplay::Color OledCDisplay::Color::fromRGB(uint8_t r, uint8_t g, uint8_t b
 {
 	Color c;
 	// rrrrrggg gggbbbbb
-	c.value = (r & ~5) | (g >> 5);
+	c.value = (r & ~7) | (g >> 5);
 	c.value <<= 8;
 	c.value = c.value | (((g << 3) & ~31) | (b >> 3));
 	return c;
@@ -63,7 +81,7 @@ OledCDisplay::Color OledCDisplay::Color::fromRGB(uint8_t r, uint8_t g, uint8_t b
 std::tuple<uint8_t, uint8_t, uint8_t> OledCDisplay::Color::toRGB() const
 {
 	return std::make_tuple(
-				(uint8_t)((value >> 8) & ~5)
+				(uint8_t)((value >> 8) & ~7)
 				, (uint8_t)((value >> 3) & ~3)
 				, (uint8_t)(value << 3)
 				);
@@ -278,19 +296,7 @@ void OledCDisplay::writeBox(uint8_t x1, uint8_t y1, uint8_t width, uint8_t heigh
 			Color c;
 			c.value = buff[buff_ix];
 			c.value <<= 8;
-			c.value = c.value | buff[buff_ix];
-			/*
-			char ch;
-			if(c == Color::Black) ch = 'k';
-			else if(c == Color::White) ch = 'w';
-			else if(c == Color::Red) ch = 'r';
-			else if(c == Color::Green) ch = 'g';
-			else if(c == Color::Blue) ch = 'b';
-			else if(c == Color::Cyan) ch = 'c';
-			else if(c == Color::Magenta) ch = 'm';
-			else if(c == Color::Yellow) ch = 'y';
-			else ch = 'E';
-			*/
+			c.value = c.value | buff[buff_ix + 1];
 			m_xpmFrameBuffer[(y1 + i) * OLED_C_SIZE + x1 + j] = c;
 		}
 	}
@@ -326,35 +332,76 @@ void OledCDisplay::drawText(uint8_t x1, uint8_t y1, const std::string &text, con
 	int char_h;
 	const Xpm font_xpm = fontXpm(font, char_w, char_h);
 
-	int x2 = x1 + text.size() * char_w;
-	if(x2 >= OLED_C_SIZE)
-		x2 = OLED_C_SIZE - 1;
-
-	int y2 = y1 + char_h;
-	if(y2 >= OLED_C_SIZE)
-		y2 = OLED_C_SIZE - 1;
-	int width = x2 - x1 + 1;
-	int height = y2 - y1 + 1;
-
+	Rect disp_rect(x1, y1, text.length() * char_w, char_h);
+	disp_rect = disp_rect.displayIntersection();
 	SpiDevice::Buffer buff;
-	buff.reserve(height * width * 2);
-	size_t max_char_count = width / char_w + 1;
-	for (size_t char_ix = 0; char_ix < text.size() && char_ix < max_char_count; ++char_ix) {
+	buff.reserve(disp_rect.height() * disp_rect.width() * 2);
+	for (size_t char_ix = 0; char_ix < text.length(); ++char_ix) {
 		int char_ascii = (uint8_t)text[char_ix];
 		int glyph_row = (char_ascii / 16)  * char_h;
 		int glyph_col = (char_ascii % 16) * char_w;
-		//int glyph_start = glyph_row * char_h + glyph_col * char_w;
-		for (int j = 0; j < char_h && j < height; ++j) {
-			for (int k = 0; k < char_w; ++k) {
-				const Xpm::Color &xpm_color = font_xpm.color(glyph_row + j, glyph_col + k);
-				int buff_ix = (j * width + (char_w * char_ix + k)) * 2;
-				OledCDisplay::Color color = (xpm_color == Xpm::Color::Black)? fg: bg;
-				buff[buff_ix] = color.value / 256;
-				buff[buff_ix+1] = color.value % 256;
-			}
+		Rect glyph_xpm_rect(glyph_col, glyph_row, char_w, char_h);
+		//Rect glyph_dest_rect(char_ix * char_w, 0, char_w, char_h);
+
+		copyXpmToSpiBufer(font_xpm
+						  , buff
+						  , glyph_xpm_rect
+						  , disp_rect.size()
+						  , Point(char_ix * char_w, 0)
+						  , [fg, bg](uint8_t r, uint8_t g, uint8_t b) -> OledCDisplay::Color
+		{
+			Xpm::Color xpm_color(r, g, b);
+			OledCDisplay::Color c = (xpm_color == Xpm::Color::Black)? fg: bg;
+			return c;
+		});
+
+	}
+	writeBox(disp_rect, buff);
+}
+
+void OledCDisplay::drawXpmImage(uint8_t x1, uint8_t y1, const char **xpm_data)
+{
+	try {
+		Xpm xpm;
+		xpm.wrapData(xpm_data);
+
+		Rect disp_rect(x1, y1, xpm.width(), xpm.height());
+		disp_rect = disp_rect.displayIntersection();
+		SpiDevice::Buffer buff;
+		buff.reserve(disp_rect.height() * disp_rect.width() * 2);
+
+		copyXpmToSpiBufer(xpm
+						  , buff
+						  , Rect(0, 0, xpm.width(), xpm.height())
+						  , disp_rect.size()
+						  , Point(0, 0)
+						  , xpmColorToOled);
+
+		writeBox(disp_rect, buff);
+	}
+	catch (std::runtime_error &e) {
+		std::cerr << e.what();
+	}
+}
+
+void OledCDisplay::copyXpmToSpiBufer(const Xpm &xpm
+									 , SpiDevice::Buffer &buff
+									 , const OledCDisplay::Rect &src_rect
+									 , const Size &buff_size
+									 , const Point &buff_pos
+									 , std::function<OledCDisplay::Color(uint8_t r, uint8_t g, uint8_t b)> color_convert)
+{
+	int max_height = buff_size.height - buff_pos.y;
+	int max_width = buff_size.width - buff_pos.x;
+	for (int j = 0; j < src_rect.height() && j < max_height; ++j) {
+		for (int k = 0; k < src_rect.width() && k < max_width; ++k) {
+			const Xpm::Color &xpm_color = xpm.colorAt(src_rect.y1() + j, src_rect.x1() + k);
+			int buff_ix = ((j + buff_pos.y) * buff_size.width + (buff_pos.x + k)) * 2;
+			OledCDisplay::Color color = color_convert(xpm_color.r, xpm_color.g, xpm_color.b);
+			buff[buff_ix] = color.value / 256;
+			buff[buff_ix+1] = color.value % 256;
 		}
 	}
-	writeBox(x1, y1, width, height, buff);
 }
 
 void OledCDisplay::demo()
@@ -419,6 +466,7 @@ void OledCDisplay::writeXpmFile(const std::string &file_name)
 	for(const auto &kv : color_map) {
 		std::tuple<uint8_t, uint8_t, uint8_t> rgb = Color(kv.first).toRGB();
 		std::fprintf(fp, "\"%c c #%02x%02x%02x\",\n", kv.second, std::get<0>(rgb), std::get<1>(rgb), std::get<2>(rgb));
+		//fprintf(stderr, "%04x -> %02x %02x %02x\n", kv.first, std::get<0>(rgb), std::get<1>(rgb), std::get<2>(rgb));
 	}
 	for (int j = 0; j < OLED_C_SIZE; ++j) {
 		std::fprintf(fp, "\"");
@@ -436,7 +484,9 @@ void OledCDisplay::writeXpmFile(const std::string &file_name)
 			std::fprintf(fp, "\",\n");
 	}
 }
+
 #endif
+
 
 
 

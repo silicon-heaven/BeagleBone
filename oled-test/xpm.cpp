@@ -27,12 +27,14 @@ int skip_white_space(const std::string& s, std::size_t ix)
 		ix++;
 	return ix;
 }
+/*
 int find_white_space(const std::string& s, std::size_t ix)
 {
 	while(ix < s.length() && s[ix] > ' ')
 		ix++;
 	return ix;
 }
+*/
 std::string ltrim(const std::string& s)
 {
 	int ix = skip_white_space(s, 0);
@@ -108,7 +110,7 @@ Xpm::ColorKey Xpm::colorKeyAt(const char *pc) const
 	return ck;
 }
 
-const Xpm::Color &Xpm::color(int row, int col) const
+const Xpm::Color &Xpm::colorAt(int row, int col) const
 {
 	const char *pc = m_pixels[row] + (col * m_colorKeyLength);
 	ColorKey ck = colorKeyAt(pc);
