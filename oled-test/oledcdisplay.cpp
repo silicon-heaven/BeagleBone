@@ -1,10 +1,15 @@
 #include "oledcdisplay.h"
 #include "seps114a.h"
+#include "xpm.h"
 
 #include <time.h>
+#include <stdio.h>
+#include <iostream>
 
 namespace {
+
 constexpr uint8_t OLED_C_SIZE = 96;
+
 void delay_ms(int ms)
 {
 	struct timespec req;
@@ -12,11 +17,63 @@ void delay_ms(int ms)
 	req.tv_nsec = ms * 1000000L;
 	nanosleep(&req, (struct timespec *)NULL);
 }
+
+void string_replace(std::string& str, char from, char to)
+{
+	for (size_t i = 0; i < str.length(); ++i) {
+		if(str[i] == from)
+			str[i] = to;
+	}
+}
+/*
+bool string_replace(std::string& str, const std::string& from, const std::string& to)
+{
+	size_t start_pos = str.find(from);
+	if(start_pos == std::string::npos)
+		return false;
+	str.replace(start_pos, from.length(), to);
+	return true;
+}
+*/
+namespace font {
+#include "font/latin1_8x8.xpm"
+}
+
+}
+
+OledCDisplay::Color OledCDisplay::Color::Black = OledCDisplay::Color::fromRGB(0x00, 0x00, 0x00);
+OledCDisplay::Color OledCDisplay::Color::White = OledCDisplay::Color::fromRGB(0xff, 0xff, 0xff);
+OledCDisplay::Color OledCDisplay::Color::Red = OledCDisplay::Color::fromRGB(0xff, 0x00, 0x00);
+OledCDisplay::Color OledCDisplay::Color::Green = OledCDisplay::Color::fromRGB(0x00, 0xff, 0x00);
+OledCDisplay::Color OledCDisplay::Color::Blue = OledCDisplay::Color::fromRGB(0x00, 0x00, 0xff);
+OledCDisplay::Color OledCDisplay::Color::Magenta = OledCDisplay::Color::fromRGB(0xff, 0x00, 0xff);
+OledCDisplay::Color OledCDisplay::Color::Cyan = OledCDisplay::Color::fromRGB(0x00, 0xff, 0xff);
+OledCDisplay::Color OledCDisplay::Color::Yellow = OledCDisplay::Color::fromRGB(0xff, 0xff, 0x00);
+
+OledCDisplay::Color OledCDisplay::Color::fromRGB(uint8_t r, uint8_t g, uint8_t b)
+{
+	Color c;
+	// rrrrrggg gggbbbbb
+	c.value = (r & ~5) | (g >> 5);
+	c.value <<= 8;
+	c.value = c.value | (((g << 3) & ~31) | (b >> 3));
+	return c;
+}
+
+std::tuple<uint8_t, uint8_t, uint8_t> OledCDisplay::Color::toRGB() const
+{
+	return std::make_tuple(
+				(uint8_t)((value >> 8) & ~5)
+				, (uint8_t)((value >> 3) & ~3)
+				, (uint8_t)(value << 3)
+				);
 }
 
 OledCDisplay::OledCDisplay()
 {
-
+#ifdef XPM_OUTPUT
+	m_xpmFrameBuffer.resize(OLED_C_SIZE * OLED_C_SIZE);
+#endif
 }
 
 void OledCDisplay::spiWrite(uint8_t byte)
@@ -69,6 +126,23 @@ void OledCDisplay::accessDDRAM()
 	m_pinCS.setValue(1);
 }
 
+const Xpm &OledCDisplay::fontXpm(OledCDisplay::Font font, int &char_w, int &char_h)
+{
+	if(font == Font::Latin1_8x8) {
+		static Xpm xpm;
+		if(!xpm.isValid())
+			xpm.wrapData(font::latin1_8x8_xpm);
+		char_w = 8;
+		char_h = 8;
+		return xpm;
+	}
+	throw std::runtime_error("unsupported font");
+	char_w = 0;
+	char_h = 0;
+	static Xpm null_xpm;
+	return null_xpm;
+}
+
 // OLED_RST <--- MikroBus RST Reset
 // OLED_CS  <--- MikroBus CS  Chip select
 // OLED_DC  <--- MikroBus PWM Data/Command
@@ -88,6 +162,9 @@ dtb=am335x-boneblack-emmc-overlay.dtb
 */
 void OledCDisplay::init(MikroBusSlot mikrobus_slot_number) throw(std::runtime_error)
 {
+#ifdef XPM_OUTPUT
+	return;
+#endif
 	const char *spi_device_name = nullptr;
 	if(mikrobus_slot_number == MikroBusSlot::Number1) {
 		m_pinRST.setNumber(1, 28); // P9.12 GPIO1_28
@@ -191,29 +268,93 @@ void OledCDisplay::init(MikroBusSlot mikrobus_slot_number) throw(std::runtime_er
 	sendCommand(SEPS114A_DISPLAY_ON_OFF,0x01);
 }
 
-void OledCDisplay::drawBox(uint8_t x1, uint8_t y1, uint8_t width, uint8_t height, uint8_t r, uint8_t g, uint8_t b)
+void OledCDisplay::writeBox(uint8_t x1, uint8_t y1, uint8_t width, uint8_t height, const SpiDevice::Buffer &buff)
 {
-	r = r >> 3;
-	g = g >> 2;
-	b = b >> 3;
-
+#ifdef XPM_OUTPUT
+	//int x2 = x1 + width - 1;
+	for (int i = 0; i < height; ++i) {
+		for (int j = 0; j < width; ++j) {
+			int buff_ix = 2 * (i * width + j);
+			Color c;
+			c.value = buff[buff_ix];
+			c.value <<= 8;
+			c.value = c.value | buff[buff_ix];
+			/*
+			char ch;
+			if(c == Color::Black) ch = 'k';
+			else if(c == Color::White) ch = 'w';
+			else if(c == Color::Red) ch = 'r';
+			else if(c == Color::Green) ch = 'g';
+			else if(c == Color::Blue) ch = 'b';
+			else if(c == Color::Cyan) ch = 'c';
+			else if(c == Color::Magenta) ch = 'm';
+			else if(c == Color::Yellow) ch = 'y';
+			else ch = 'E';
+			*/
+			m_xpmFrameBuffer[(y1 + i) * OLED_C_SIZE + x1 + j] = c;
+		}
+	}
+#else
 	sendCommand(SEPS114A_MEM_X1, x1);
 	sendCommand(SEPS114A_MEM_X2, x1 + width - 1);
 	sendCommand(SEPS114A_MEM_Y1, y1);
 	sendCommand(SEPS114A_MEM_Y2, y1 + height - 1);
 	accessDDRAM();
+	sendData(buff);
+#endif
+}
+
+void OledCDisplay::drawBox(uint8_t x1, uint8_t y1, uint8_t width, uint8_t height, const Color &color)
+{
 	SpiDevice::Buffer buff;
 	buff.resize(height * width * 2);
 	int n = 0;
 	for (int j = 0; j < height; ++j) {
 		for (size_t i = 0; i < width; ++i) {
 			// rrrrrggg gggbbbbb
-			buff[n] = (r << 3) | (g >> 3);
-			buff[n+1] = (g << 5) | b;
+			buff[n] = color.value / 256;
+			buff[n+1] = color.value % 256;
 			n += 2;
 		}
 	}
-	sendData(buff);
+	writeBox(x1, y1, width, height, buff);
+}
+
+void OledCDisplay::drawText(uint8_t x1, uint8_t y1, const std::string &text, const OledCDisplay::Color &fg, const OledCDisplay::Color &bg, OledCDisplay::Font font)
+{
+	int char_w;
+	int char_h;
+	const Xpm font_xpm = fontXpm(font, char_w, char_h);
+
+	int x2 = x1 + text.size() * char_w;
+	if(x2 >= OLED_C_SIZE)
+		x2 = OLED_C_SIZE - 1;
+
+	int y2 = y1 + char_h;
+	if(y2 >= OLED_C_SIZE)
+		y2 = OLED_C_SIZE - 1;
+	int width = x2 - x1 + 1;
+	int height = y2 - y1 + 1;
+
+	SpiDevice::Buffer buff;
+	buff.reserve(height * width * 2);
+	size_t max_char_count = width / char_w + 1;
+	for (size_t char_ix = 0; char_ix < text.size() && char_ix < max_char_count; ++char_ix) {
+		int char_ascii = (uint8_t)text[char_ix];
+		int glyph_row = (char_ascii / 16)  * char_h;
+		int glyph_col = (char_ascii % 16) * char_w;
+		//int glyph_start = glyph_row * char_h + glyph_col * char_w;
+		for (int j = 0; j < char_h && j < height; ++j) {
+			for (int k = 0; k < char_w; ++k) {
+				const Xpm::Color &xpm_color = font_xpm.color(glyph_row + j, glyph_col + k);
+				int buff_ix = (j * width + (char_w * char_ix + k)) * 2;
+				OledCDisplay::Color color = (xpm_color == Xpm::Color::Black)? fg: bg;
+				buff[buff_ix] = color.value / 256;
+				buff[buff_ix+1] = color.value % 256;
+			}
+		}
+	}
+	writeBox(x1, y1, width, height, buff);
 }
 
 void OledCDisplay::demo()
@@ -225,7 +366,7 @@ void OledCDisplay::demo()
 		uint8_t r = (color >> 16);
 		uint8_t g = (color >> 8);
 		uint8_t b = color;
-		drawBox(offset, offset, width, width, r, g, b);
+		drawBox(offset, offset, width, width, Color::fromRGB(r, g, b));
 		color >>= 2;
 	}
 	delay_ms(5000);
@@ -239,3 +380,66 @@ void OledCDisplay::demo()
 		delay_ms(5000);
 	}
 }
+
+#ifdef XPM_OUTPUT
+void OledCDisplay::writeXpmFile(const std::string &file_name)
+{
+	std::string fn = file_name;
+	if(!fn.length()) {
+		static int no = 0;
+		fn = std::to_string(++no) + ".xpm";
+	}
+	std::FILE* fp = std::fopen(fn.c_str(), "w");
+	if(!fp) {
+		perror("Error open XPM file for write");
+		throw std::runtime_error("Error open XPM file for write");
+	}
+	char cch1 = '#';
+	char cch = cch1;
+	// scan colors
+	std::map<uint16_t, char> color_map;
+	for(const Color &clr : m_xpmFrameBuffer) {
+		if(color_map.count(clr.value) == 0) {
+			color_map[clr.value] = cch;
+			if(cch < '~') {
+				cch++;
+			}
+			else {
+				std::cerr << "Max color count exceeded!";
+				break;
+			}
+		}
+	}
+	std::fprintf(fp, "/* XPM */\n");
+	std::string arr_name = file_name;
+	string_replace(arr_name, '.', '_');
+	std::fprintf(fp, "static const char * a%s[] = {\n", arr_name.c_str());
+	std::fprintf(fp, "\"%d %d %d 1\",\n", OLED_C_SIZE, OLED_C_SIZE, (int)color_map.size() + 1);
+	std::fprintf(fp, "\"  c None\",\n");
+	for(const auto &kv : color_map) {
+		std::tuple<uint8_t, uint8_t, uint8_t> rgb = Color(kv.first).toRGB();
+		std::fprintf(fp, "\"%c c #%02x%02x%02x\",\n", kv.second, std::get<0>(rgb), std::get<1>(rgb), std::get<2>(rgb));
+	}
+	for (int j = 0; j < OLED_C_SIZE; ++j) {
+		std::fprintf(fp, "\"");
+		for (int i = 0; i < OLED_C_SIZE; ++i) {
+			char c = ' ';
+			const Color &clr = m_xpmFrameBuffer[j * OLED_C_SIZE + i];
+			auto it = color_map.find(clr.value);
+			if(it != color_map.end())
+				c = it->second;
+			std::fprintf(fp, "%c", c);
+		}
+		if(j == OLED_C_SIZE - 1)
+			std::fprintf(fp, "\"};\n");
+		else
+			std::fprintf(fp, "\",\n");
+	}
+}
+#endif
+
+
+
+
+
+
