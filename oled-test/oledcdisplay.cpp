@@ -12,7 +12,7 @@ void delay_ms(int ms)
 {
 	struct timespec req;
 	req.tv_sec = ms / 1000;
-	req.tv_nsec = ms * 1000000L;
+	req.tv_nsec = (ms % 1000) * 1000000L;
 	nanosleep(&req, (struct timespec *)NULL);
 }
 
@@ -303,8 +303,8 @@ void OledCDisplay::writeBox(uint8_t x1, uint8_t y1, uint8_t width, uint8_t heigh
 		}
 	}
 #else
-	sendCommand(SEPS114A_MEM_X1, x1);
-	sendCommand(SEPS114A_MEM_X2, x1 + width - 1);
+	sendCommand(SEPS114A_MEM_X1, OLED_C_SIZE - (x1 + width));
+	sendCommand(SEPS114A_MEM_X2, OLED_C_SIZE - x1 - 1);
 	sendCommand(SEPS114A_MEM_Y1, y1);
 	sendCommand(SEPS114A_MEM_Y2, y1 + height - 1);
 	accessDDRAM();
