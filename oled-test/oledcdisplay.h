@@ -13,6 +13,7 @@ class Xpm;
 class OledCDisplay
 {
 public:
+	static constexpr int OLED_C_SIZE = 96;
 	enum class MikroBusSlot {Number1, Number2};
 	enum class Font {Latin1_8x8};
 	struct Color

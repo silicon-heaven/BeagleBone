@@ -8,8 +8,6 @@
 
 namespace {
 
-constexpr uint8_t OLED_C_SIZE = 96;
-
 void delay_ms(int ms)
 {
 	struct timespec req;
@@ -18,6 +16,7 @@ void delay_ms(int ms)
 	nanosleep(&req, (struct timespec *)NULL);
 }
 
+#ifdef XPM_OUTPUT
 void string_replace(std::string& str, char from, char to)
 {
 	for (size_t i = 0; i < str.length(); ++i) {
@@ -25,6 +24,7 @@ void string_replace(std::string& str, char from, char to)
 			str[i] = to;
 	}
 }
+#endif
 /*
 bool string_replace(std::string& str, const std::string& from, const std::string& to)
 {
@@ -88,6 +88,7 @@ std::tuple<uint8_t, uint8_t, uint8_t> OledCDisplay::Color::toRGB() const
 }
 
 OledCDisplay::OledCDisplay()
+	: m_spi(false)
 {
 #ifdef XPM_OUTPUT
 	m_xpmFrameBuffer.resize(OLED_C_SIZE * OLED_C_SIZE);
@@ -288,6 +289,7 @@ void OledCDisplay::init(MikroBusSlot mikrobus_slot_number) throw(std::runtime_er
 
 void OledCDisplay::writeBox(uint8_t x1, uint8_t y1, uint8_t width, uint8_t height, const SpiDevice::Buffer &buff)
 {
+	//std::cerr << "writeBox" << (int)x1 << ", " << (int)y1 << ", " << (int)width << ", " << (int)height << ", size: " << buff.size() << std::endl;
 #ifdef XPM_OUTPUT
 	//int x2 = x1 + width - 1;
 	for (int i = 0; i < height; ++i) {
@@ -335,7 +337,7 @@ void OledCDisplay::drawText(uint8_t x1, uint8_t y1, const std::string &text, con
 	Rect disp_rect(x1, y1, text.length() * char_w, char_h);
 	disp_rect = disp_rect.displayIntersection();
 	SpiDevice::Buffer buff;
-	buff.reserve(disp_rect.height() * disp_rect.width() * 2);
+	buff.resize(disp_rect.height() * disp_rect.width() * 2);
 	for (size_t char_ix = 0; char_ix < text.length(); ++char_ix) {
 		int char_ascii = (uint8_t)text[char_ix];
 		int glyph_row = (char_ascii / 16)  * char_h;
@@ -368,7 +370,7 @@ void OledCDisplay::drawXpmImage(uint8_t x1, uint8_t y1, const char **xpm_data)
 		Rect disp_rect(x1, y1, xpm.width(), xpm.height());
 		disp_rect = disp_rect.displayIntersection();
 		SpiDevice::Buffer buff;
-		buff.reserve(disp_rect.height() * disp_rect.width() * 2);
+		buff.resize(disp_rect.height() * disp_rect.width() * 2);
 
 		copyXpmToSpiBufer(xpm
 						  , buff
@@ -396,7 +398,7 @@ void OledCDisplay::copyXpmToSpiBufer(const Xpm &xpm
 	for (int j = 0; j < src_rect.height() && j < max_height; ++j) {
 		for (int k = 0; k < src_rect.width() && k < max_width; ++k) {
 			const Xpm::Color &xpm_color = xpm.colorAt(src_rect.y1() + j, src_rect.x1() + k);
-			int buff_ix = ((j + buff_pos.y) * buff_size.width + (buff_pos.x + k)) * 2;
+			int buff_ix = ((j + buff_pos.y) * buff_size.width + (buff_size.width - (buff_pos.x + k) - 1)) * 2;
 			OledCDisplay::Color color = color_convert(xpm_color.r, xpm_color.g, xpm_color.b);
 			buff[buff_ix] = color.value / 256;
 			buff[buff_ix+1] = color.value % 256;
@@ -406,7 +408,8 @@ void OledCDisplay::copyXpmToSpiBufer(const Xpm &xpm
 
 void OledCDisplay::demo()
 {
-	sendCommand(0x1D, 0x02);                //Set Memory Read/Write mode
+	/*
+	sendCommand(SEPS114A_MEMORY_WRITE_READ, 0x02);                //Set Memory Read/Write mode
 	int color = 0xFF0000;
 	for (int offset = 0; offset < OLED_C_SIZE / 2; offset+=5) {
 		int width = OLED_C_SIZE - 2 * offset;
@@ -417,6 +420,7 @@ void OledCDisplay::demo()
 		color >>= 2;
 	}
 	delay_ms(5000);
+	*/
 	for (int j = 0; j < 10; ++j) {
 		for(int i=0; i<8; i++){
 			sendCommand(SEPS114A_SCREEN_SAVER_MODE,i);
@@ -470,7 +474,7 @@ void OledCDisplay::writeXpmFile(const std::string &file_name)
 	}
 	for (int j = 0; j < OLED_C_SIZE; ++j) {
 		std::fprintf(fp, "\"");
-		for (int i = 0; i < OLED_C_SIZE; ++i) {
+		for (int i = OLED_C_SIZE - 1; i >= 0; --i) {
 			char c = ' ';
 			const Color &clr = m_xpmFrameBuffer[j * OLED_C_SIZE + i];
 			auto it = color_map.find(clr.value);
