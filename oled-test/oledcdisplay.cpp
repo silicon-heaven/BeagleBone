@@ -445,18 +445,19 @@ void OledCDisplay::writeXpmFile(const std::string &file_name)
 		perror("Error open XPM file for write");
 		throw std::runtime_error("Error open XPM file for write");
 	}
-	char cch1 = '#';
+	const char cch1 = '#';
+	const char cch2 = '~';
 	char cch = cch1;
 	// scan colors
 	std::map<uint16_t, char> color_map;
 	for(const Color &clr : m_xpmFrameBuffer) {
 		if(color_map.count(clr.value) == 0) {
 			color_map[clr.value] = cch;
-			if(cch < '~') {
+			if(cch < cch2) {
 				cch++;
 			}
 			else {
-				std::cerr << "Max color count exceeded!";
+				std::cerr << "Max color count " << (int)(cch2 - cch1 + 1) << " exceeded!";
 				break;
 			}
 		}
