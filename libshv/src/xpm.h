@@ -1,10 +1,14 @@
-#ifndef XPM_H
-#define XPM_H
+#ifndef SHV_XPM_H
+#define SHV_XPM_H
+
+#include "shvglobal.h"
 
 #include <map>
 #include <string>
 
-class Xpm
+namespace shv {
+
+class SHV_DECL_EXPORT Xpm
 {
 public:
 	struct Color
@@ -39,5 +43,7 @@ private:
 	std::map<ColorKey, Color> m_colors;
 	const char **m_pixels = nullptr;
 };
+
+}
 
 #endif // XPM_H

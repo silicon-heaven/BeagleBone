@@ -4,6 +4,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
+namespace shv {
+
 bool Gpio::checkExported() throw(std::runtime_error)
 {
 	if(dirExists("/sys/class/gpio/gpio" + std::to_string(m_number)))
@@ -41,4 +43,6 @@ bool Gpio::dirExists(const std::string &dir_name)
 	if (stat(dir_name.c_str(), &sb) == 0 && S_ISDIR(sb.st_mode))
 		return true;
 	return false;
+}
+
 }

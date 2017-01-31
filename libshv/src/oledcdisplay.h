@@ -1,5 +1,7 @@
-#ifndef OLEDCDISPLAY_H
-#define OLEDCDISPLAY_H
+#ifndef SHV_OLEDCDISPLAY_H
+#define SHV_OLEDCDISPLAY_H
+
+#include "shvglobal.h"
 
 #include "gpio.h"
 #include "spidevice.h"
@@ -8,9 +10,11 @@
 #include <tuple>
 #include <functional>
 
+namespace shv {
+
 class Xpm;
 
-class OledCDisplay
+class SHV_DECL_EXPORT OledCDisplay
 {
 public:
 	static constexpr int OLED_C_SIZE = 96;
@@ -114,5 +118,7 @@ private:
 	std::vector<Color> m_xpmFrameBuffer;
 #endif
 };
+
+}
 
 #endif // OLEDCDISPLAY_H

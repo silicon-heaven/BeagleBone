@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <iostream>
 
+namespace shv {
+
 namespace {
 
 void delay_ms(int ms)
@@ -457,7 +459,7 @@ void OledCDisplay::writeXpmFile(const std::string &file_name)
 				cch++;
 			}
 			else {
-				std::cerr << "Max color count " << (int)(cch2 - cch1 + 1) << " exceeded!";
+				std::cerr << "Max color count " << (int)(cch2 - cch1 + 1) << " exceeded, some pixels will not be saved with proper color!";
 				break;
 			}
 		}
@@ -492,7 +494,7 @@ void OledCDisplay::writeXpmFile(const std::string &file_name)
 
 #endif
 
-
+}
 
 
 

@@ -1,7 +1,9 @@
-#include "oledcdisplay.h"
+#include <shv/oledcdisplay.h>
 
+namespace {
 #include "images/elektroline.xpm"
 #include "images/tram.xpm"
+}
 
 void delay_ms(int ms)
 {
@@ -13,12 +15,12 @@ void delay_ms(int ms)
 
 int main()
 {
-	OledCDisplay disp;
-	disp.init(OledCDisplay::MikroBusSlot::Number2);
+	shv::OledCDisplay disp;
+	disp.init(shv::OledCDisplay::MikroBusSlot::Number2);
 	disp.drawXpmImage(0, 0, elektroline_xpm);
-	disp.drawText(5, 5, "Ele", OledCDisplay::Color::White, OledCDisplay::Color::fromRGB(0x18, 0x5c, 0x28));
+	disp.drawText(5, 5, "Ele", shv::OledCDisplay::Color::White, shv::OledCDisplay::Color::fromRGB(0x18, 0x5c, 0x28));
 	//disp.drawText(0, 10, "123456789012", OledCDisplay::Color::White, OledCDisplay::Color::fromRGB(0x18, 0x5c, 0x28));
-	delay_ms(5000);
+	//delay_ms(5000);
 	//disp.drawBox(0, 0, OledCDisplay::OLED_C_SIZE, OledCDisplay::OLED_C_SIZE, OledCDisplay::Color::White);
 	disp.drawXpmImage(0, 0, tram_xpm);
 	//disp.drawBox(0, 0, 50, 60, OledCDisplay::Color::Red);

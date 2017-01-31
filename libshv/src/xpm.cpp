@@ -2,6 +2,8 @@
 
 #include <vector>
 
+namespace shv {
+
 namespace {
 /*
 std::vector<std::string> split(const std::string& s, char separator)
@@ -117,3 +119,4 @@ const Xpm::Color &Xpm::colorAt(int row, int col) const
 	return m_colors.at(ck);
 }
 
+}

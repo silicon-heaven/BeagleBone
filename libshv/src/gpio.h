@@ -1,9 +1,13 @@
-#ifndef GPIO_H
-#define GPIO_H
+#ifndef SHV_GPIO_H
+#define SHV_GPIO_H
+
+#include "shvglobal.h"
 
 #include <stdexcept>
 
-class Gpio
+namespace shv {
+
+class SHV_DECL_EXPORT Gpio
 {
 public:
 	enum class Direction {In, Out};
@@ -23,5 +27,7 @@ private:
 private:
 	int m_number = -1;
 };
+
+}
 
 #endif // GPIO_H

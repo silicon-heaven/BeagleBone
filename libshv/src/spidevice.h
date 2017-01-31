@@ -1,10 +1,14 @@
-#ifndef SPIDEVICE_H
-#define SPIDEVICE_H
+#ifndef SHV_SPIDEVICE_H
+#define SHV_SPIDEVICE_H
+
+#include "shvglobal.h"
 
 #include <stdexcept>
 #include <vector>
 
-class SpiDevice
+namespace shv {
+
+class SHV_DECL_EXPORT SpiDevice
 {
 public:
 	using Buffer = std::vector<uint8_t>;
@@ -22,5 +26,7 @@ private:
 	uint8_t m_bits = 0;
 	uint16_t m_delay = 0; //< usec
 };
+
+}
 
 #endif // SPIDEVICE_H

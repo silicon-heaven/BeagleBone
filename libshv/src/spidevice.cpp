@@ -10,6 +10,8 @@
 #include <vector>
 #include <cstring>
 
+namespace shv {
+
 SpiDevice::SpiDevice(bool debug)
 	: m_debug(debug)
 {
@@ -132,4 +134,6 @@ void SpiDevice::transfer(const Buffer &tx_data, Buffer *p_rx_data) throw(std::ru
 			dump_buffer(*p_rx_data);
 		}
 	}
+}
+
 }
