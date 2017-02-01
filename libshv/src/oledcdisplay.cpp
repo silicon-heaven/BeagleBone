@@ -469,7 +469,6 @@ void OledCDisplay::writeXpmFile(const std::string &file_name)
 	char cch = cch1;
 	// scan colors
 	std::map<Xpm::Color, char> color_map;
-	int n = 0;
 	for(const Xpm::Color &clr : m_xpmFrameBuffer) {
 		//std::cerr << "writeXpmFile " << n++ << " ---> " << (int)clr.r << ", " << (int)clr.g << ", " << (int)clr.b << std::endl;
 		if(color_map.count(clr) == 0) {
