@@ -1,6 +1,6 @@
 message("including $$PWD")
 
-QT += core
+QT -= core
 QT -= gui
 
 CONFIG += C++11

@@ -1,6 +1,7 @@
 #include "xpm.h"
 
 #include <vector>
+#include <iostream>
 
 namespace shv {
 
@@ -44,14 +45,21 @@ std::string ltrim(const std::string& s)
 }
 }
 
-Xpm::Color Xpm::Color::Black;
+Xpm::Color Xpm::Color::Black = Xpm::Color::fromRGB(0x00, 0x00, 0x00);
+Xpm::Color Xpm::Color::White = Xpm::Color::fromRGB(0xff, 0xff, 0xff);
+Xpm::Color Xpm::Color::Red = Xpm::Color::fromRGB(0xff, 0x00, 0x00);
+Xpm::Color Xpm::Color::Green = Xpm::Color::fromRGB(0x00, 0xff, 0x00);
+Xpm::Color Xpm::Color::Blue = Xpm::Color::fromRGB(0x00, 0x00, 0xff);
+Xpm::Color Xpm::Color::Magenta = Xpm::Color::fromRGB(0xff, 0x00, 0xff);
+Xpm::Color Xpm::Color::Cyan = Xpm::Color::fromRGB(0x00, 0xff, 0xff);
+Xpm::Color Xpm::Color::Yellow = Xpm::Color::fromRGB(0xff, 0xff, 0x00);
 
 Xpm::Color Xpm::Color::fromString(const std::string &def)
 {
 	if(def.at(0) == '#') {
 		std::string s = def.substr(1); // skip #
 		int rgb = std::stoi(s, nullptr, 16);
-		Color color(rgb >> 16, (rgb >> 8) % 256, rgb % 256);
+		Color color = Color::fromRGB(rgb >> 16, (rgb >> 8) % 256, rgb % 256);
 		return color;
 	}
 	else if(def == "None") {
@@ -61,6 +69,9 @@ Xpm::Color Xpm::Color::fromString(const std::string &def)
 	return Color();
 }
 
+//============================================================
+// Xpm
+//============================================================
 Xpm::Xpm()
 {
 }
@@ -88,7 +99,7 @@ void Xpm::wrapData(const char *data[])
 
 	for (int i = 0; i < n_colors; ++i) {
 		std::string s(data[line_ix++]);
-		ColorKey ck = colorKeyAt(s.c_str());
+		ColorKey ck = colorKeyAt(s.c_str(), m_colorKeyLength);
 		ix = skip_white_space(s, m_colorKeyLength);
 		char c_type = s.at(ix++);
 		if(c_type != 'c')
@@ -101,10 +112,10 @@ void Xpm::wrapData(const char *data[])
 	m_pixels = data + line_ix;
 }
 
-Xpm::ColorKey Xpm::colorKeyAt(const char *pc) const
+Xpm::ColorKey Xpm::colorKeyAt(const char *pc, int key_len)
 {
 	ColorKey ck = 0;
-	for (std::size_t j = 0; j < m_colorKeyLength; ++j) {
+	for (int j = 0; j < key_len; ++j) {
 		if(j > 0)
 			ck <<= 8;
 		ck = ck | (uint8_t)pc[j];
@@ -115,8 +126,53 @@ Xpm::ColorKey Xpm::colorKeyAt(const char *pc) const
 const Xpm::Color &Xpm::colorAt(int row, int col) const
 {
 	const char *pc = m_pixels[row] + (col * m_colorKeyLength);
-	ColorKey ck = colorKeyAt(pc);
+	ColorKey ck = colorKeyAt(pc, m_colorKeyLength);
 	return m_colors.at(ck);
+}
+
+//============================================================
+// XpmAtlas
+//============================================================
+
+void XpmAtlas::wrapData(const char *data[], int data_size)
+{
+	Super::wrapData(data);
+	int line_ix = 1 + m_colors.size() + m_height;
+	for (; line_ix < data_size; ++line_ix) {
+		const char *line = data[line_ix];
+		std::string s(line);
+		std::string::size_type ix = s.find('=');
+		if(ix != std::string::npos) {
+			std::string key = s.substr(0, ix);
+			std::string val = s.substr(ix+1);
+			//std::cerr << key << "->" << val << std::endl;
+			if(key == "glyphWidth")
+				m_glyphWidth = std::stoi(val);
+			else if(key == "glyphHeight")
+				m_glyphHeight = std::stoi(val);
+		}
+	}
+}
+
+//============================================================
+// XpmAtlas
+//============================================================
+void XpmFont::wrapData(const char *data[], int data_size)
+{
+	Super::wrapData(data, data_size);
+	int line_ix = 1 + m_colors.size() + m_height;
+	for (; line_ix < data_size; ++line_ix) {
+		const char *line = data[line_ix];
+		std::string s(line);
+		std::string::size_type ix = s.find('=');
+		if(ix != std::string::npos) {
+			std::string key = s.substr(0, ix);
+			std::string val = s.substr(ix+1);
+			//std::cerr << key << "->" << val << std::endl;
+			if(key == "firstGlyphAscii")
+				m_firstGlyphAscii = std::stoi(val);
+		}
+	}
 }
 
 }
