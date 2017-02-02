@@ -46,6 +46,7 @@ public:
 
 		Rect() {}
 		Rect(int x, int y, int w, int h) : p(x, y), sz(w, h) {}
+		Rect(const Point &left_top, const Size &size) : p(left_top), sz(size) {}
 
 		int x1() const {return p.x;}
 		int y1() const {return p.y;}
@@ -129,6 +130,9 @@ private:
 
 	std::vector<Xpm::Color> m_xpmFrameBuffer;
 };
+
+inline const OledCDisplay::Point operator+(const OledCDisplay::Point &p1, const OledCDisplay::Point &p2) { return OledCDisplay::Point(p1.x + p2.x, p1.y + p2.y); }
+inline const OledCDisplay::Point operator-(const OledCDisplay::Point &p1, const OledCDisplay::Point &p2) { return OledCDisplay::Point(p1.x - p2.x, p1.y - p2.y); }
 
 }
 
