@@ -1,2 +1,1 @@
-# silicon-heaven
-Silicon Heaven
+# BeagleBone playground
